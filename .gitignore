@@ -1,0 +1,18 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraform.lock.hcl
+
+# tfvars（認証情報・アカウント情報を含むため）
+terraform.tfvars
+*.auto.tfvars
+
+.kiro/

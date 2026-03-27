@@ -8,12 +8,22 @@ variable "aws_account_id" {
   type        = string
 }
 
-variable "instance_ids" {
-  description = "スケジュール対象のEC2インスタンスIDリスト"
+variable "linux_instance_ids" {
+  description = "スケジュール対象のLinux EC2インスタンスIDリスト（平日+土日）"
   type        = list(string)
 
   validation {
-    condition     = length(var.instance_ids) > 0
-    error_message = "instance_ids は1つ以上のインスタンスIDを含む必要があります。"
+    condition     = length(var.linux_instance_ids) > 0
+    error_message = "linux_instance_ids は1つ以上のインスタンスIDを含む必要があります。"
+  }
+}
+
+variable "windows_instance_ids" {
+  description = "スケジュール対象のWindows EC2インスタンスIDリスト（平日のみ）"
+  type        = list(string)
+
+  validation {
+    condition     = length(var.windows_instance_ids) > 0
+    error_message = "windows_instance_ids は1つ以上のインスタンスIDを含む必要があります。"
   }
 }

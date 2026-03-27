@@ -11,15 +11,21 @@ locals {
     }
     weekday_stop = {
       name        = "ec2-weekday-stop"
-      description = "平日午後9時にEC2インスタンスを停止"
-      cron        = "cron(0 21 ? * MON-FRI *)"
+      description = "平日午後6時にEC2インスタンスを停止"
+      cron        = "cron(0 18 ? * MON-FRI *)"
       action      = "stopInstances"
     }
     saturday_start = {
       name        = "ec2-saturday-start"
-      description = "土曜日朝2時にEC2インスタンスを起動"
-      cron        = "cron(0 2 ? * SAT *)"
+      description = "土曜日0時にEC2インスタンスを起動"
+      cron        = "cron(0 0 ? * SAT *)"
       action      = "startInstances"
+    }
+    sunday_stop = {
+      name        = "ec2-sunday-stop"
+      description = "日曜日19時にEC2インスタンスを停止"
+      cron        = "cron(0 19 ? * SUN *)"
+      action      = "stopInstances"
     }
   }
 }

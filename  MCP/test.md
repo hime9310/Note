@@ -1,56 +1,43 @@
-## MTG発表用 文案（日本語・ビジネス正式）
+# 検証フェーズ ディレクトリ構成案
+workspace/
+├── .kiro/
+│   ├── steering/
+│   │   ├── coding-standards.md       # ← 既存をそのまま配置
+│   │   ├── terraform-rules.md        # ← 既存をそのまま配置
+│   │   └── spec-structure-rules.md   # ← 新規（Specフォルダ命名規則）
+│   │
+│   ├── specs/
+│   │   └── aws/
+│   │       └── ec2-rds-hub/          # 今回の検証対象
+│   │           ├── requirements.md   # Kiro自動生成
+│   │           ├── design.md         # Kiro自動生成
+│   │           └── tasks.md          # Kiro自動生成
+│   │
+│   └── skills/
+│       ├── terraform-patterns/
+│       │   ├── terraform.md          # ← 既存をそのまま配置
+│       │   └── references/
+│       │       └── module-catalog.md # ← AWS-module-catalog.md をリネーム
+│       │
+│       └── design-doc/
+│           ├── design-doc.md         # 設計書生成手順
+│           └── references/
+│               ├── design-template.md # ← IaC_EC2-RDS_〜.md から抽出
+│               └── images-template.png # ← EC2_architecture.drawio.png
+│
+├── Eng-repos/
+│   └── AWSRepos/                     # git clone先（Skills経由で最新化）
+│       └── [既存Terraformモジュール群]
+│
+└── inputs/                           # ★案件インプット置き場
+    └── ec2-rds-hub/                  # 案件名フォルダで管理
+        ├── qa-table.md               # ← QA票.md をそのまま
+        ├── qa-table.xlsx             # ← QA票.xlsx をそのまま
+        ├── parameter-sheet.md        # ← パラメーターシート.md
+        ├── parameter-sheet.xlsx      # ← パラメーターシート.xlsx
+        └── progress.xlsx             # ← Input進捗.xlsx
 
 ---
 
-### 📋 発表文案
+## 検証の進め方イメージ
 
----
-
-**【冒頭・導入】**
-
-本日はお時間をいただきありがとうございます。
-先日ご共有いただいたQ&AのNo.16に関連しまして、私どもの方で追加検証を行いました結果、**VenafiからAmazon CloudFrontへの証明書プロビジョニングを、完全自動化することに成功しました。**
-Venafiの公式ドキュメントを精査した結果、IAM証明書ストアを経由することで実現できることを確認・検証済みです。
-
-
-**参考リンク：**
----
-
-**【方法・ロジック説明】**
-
-実現方法は以下の通りです。
-
-**① Provisioning ToをIAMに設定する**
-- VenafiのApplication設定において、Provisioning ToをACMではなく **「IAM」** に変更します。
-- IAM Path for Certificateに **`/cloudfront/`** を指定することで、CloudFront向けの証明書としてIAM証明書ストアへ自動配置されます。
-
-**② 必要なIAMポリシーを付与する**
-- VenafiがAWSへアクセスするためのIAMユーザーに、以下のアクションを含むポリシーを付与します。
-
-上記設定により、証明書の更新がVenafiから自動的にIAM証明書ストアへPushされ、CloudFrontへ反映されます。
-
-
-
----
-
-**【補足：IAM証明書ストアについて】**
-
-一点、重要な補足をお伝えします。
-
-今回利用したIAM証明書ストアは、**ACM登場以前（2015年以前）のレガシー機能**です。現在もAWSとして利用は可能ですが、以下の点にご留意ください。
-
-| 項目 | 内容 |
-|------|------|
-| AWSの推奨方針 | 非推奨（ACMへの移行を推奨） |
-| コンソール上の視認性 | ❌ 確認不可（CLIのみ） |
-| 自動更新通知 | ❌ ACMのような通知機能なし |
-| 機能拡張の予定 | ❌ AWSとして積極投資なし |
-
-つきましては、**現時点では技術的に完全自動化が実現できる**ことをご共有しつつも、IAM証明書ストアのレガシー性を踏まえた運用上のリスク評価は、引き続き貴チームと連携しながら検討できればと考えております。
-
----
-
-**【クロージング】**
-
-本情報が、他のメンバーファームやアプリケーションチームへの展開にも役立てば幸いです。
-引き続きよろしくお願いいたします。

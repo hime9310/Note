@@ -31,7 +31,79 @@ EngRepos/AWS/
 
 ---
 
-## 2. 環境タイプの判定
+## 2. コード出力フォルダ構成
+
+環境数はインフラ構成シートのシート数に従う。各環境フォルダ配下に以下を作成すること。
+
+```
+src/{cloud}/{project}/
+├── {env1}/                         # 例：staging
+│   ├── main.tf
+│   ├── variables.tf
+│   ├── outputs.tf
+│   ├── version.tf
+│   ├── provider.tf
+│   ├── {env1}.tfbackend            # 例：staging.tfbackend
+│   ├── env/
+│   │   └── {env1}.tfvars          # 例：staging.tfvars
+│   └── certs/                      # ACM証明書格納フォルダ
+│       ├── server.crt              # 証明書本体（実ファイルは別途配置）
+│       ├── key.pem                 # 秘密鍵（実ファイルは別途配置）
+│       └── ca.crt                  # 中間CA証明書（実ファイルは別途配置）
+└── {env2}/                         # 例：production
+    ├── main.tf
+    ├── variables.tf
+    ├── outputs.tf
+    ├── version.tf
+    ├── provider.tf
+    ├── {env2}.tfbackend
+    ├── env/
+    │   └── {env2}.tfvars
+    └── certs/
+        ├── server.crt
+        ├── key.pem
+        └── ca.crt
+```
+
+> `certs/` フォルダは空フォルダとして作成し、実際の証明書ファイルは人間が別途配置すること。
+
+---
+
+## 3. backend ファイルの書き方
+
+各環境フォルダに `{env}.tfbackend` ファイルを作成すること。
+
+```hcl
+# ローカルにtfstateファイルを保存する場合
+path = "envs/{env}.terraform.tfstate"
+
+# S3に保存する場合（必要に応じてコメントアウトを解除）
+# bucket  = "your-terraform-state-bucket"
+# key     = "{project}/{env}/terraform.tfstate"
+# region  = "ap-northeast-1"
+# encrypt = true
+```
+
+---
+
+## 4. ACM証明書の参照方法
+
+main.tf でACMモジュールを呼び出す場合、`certs/` フォルダ内の証明書ファイルを参照すること。
+
+```hcl
+module "acm" {
+  source            = "../../../../EngRepos/AWS/cms-aws-terraform-module-network/ACM"
+  name_prefix       = var.name_prefix
+  env               = var.env
+  certificate_body  = file("${path.module}/certs/server.crt")
+  private_key       = file("${path.module}/certs/key.pem")
+  certificate_chain = file("${path.module}/certs/ca.crt")
+}
+```
+
+---
+
+## 5. 環境タイプの判定
 
 添付された基本設計書の「1.基本設計」シート先頭の記載を読み取ること。
 
@@ -42,7 +114,7 @@ EngRepos/AWS/
 
 ---
 
-## 3. 環境タイプ別の生成ルール
+## 6. 環境タイプ別の生成ルール
 
 ### DCS Hub環境の場合
 
@@ -76,32 +148,34 @@ variable "vpc_id" {
 
 ---
 
-## 4. モジュールの参照パス
+## 7. モジュールの参照パス
 
 **絶対パスは使用しない**（開発者ごとにローカルパスが異なるため）。
-`cms-aws-terraform-architecture/<Pattern>/main.tf` から見た**相対パス**でモジュールを参照する。
+`src/{cloud}/{project}/{env}/main.tf` から見た**相対パス**でモジュールを参照する。
+
+> 環境フォルダが1層増えたため、パスの起点は `../../../../` となる。
 
 ### カテゴリ別の参照先
 
 | カテゴリ | 参照先（sourceの起点） |
 |---|---|
-| Network | `../../cms-aws-terraform-module-network/<ModuleName>` |
-| Compute | `../../cms-aws-terraform-module-compute/<ModuleName>` |
-| DB / Storage | `../../cms-aws-terraform-module-db/<ModuleName>` |
-| Integration | `../../cms-aws-terraform-module-integration/<ModuleName>` |
-| MachineLearning | `../../cms-aws-terraform-module-machinelearning/<ModuleName>` |
+| Network | `../../../../EngRepos/AWS/cms-aws-terraform-module-network/<ModuleName>` |
+| Compute | `../../../../EngRepos/AWS/cms-aws-terraform-module-compute/<ModuleName>` |
+| DB / Storage | `../../../../EngRepos/AWS/cms-aws-terraform-module-db/<ModuleName>` |
+| Integration | `../../../../EngRepos/AWS/cms-aws-terraform-module-integration/<ModuleName>` |
+| MachineLearning | `../../../../EngRepos/AWS/cms-aws-terraform-module-machinelearning/<ModuleName>` |
 
 ### 記述例
 
 ```hcl
 module "kms" {
-  source      = "../../cms-aws-terraform-module-network/KMS"
+  source      = "../../../../EngRepos/AWS/cms-aws-terraform-module-network/KMS"
   alias       = "example-kms"
   description = "sample"
 }
 
 module "fargate_webapp" {
-  source      = "../../cms-aws-terraform-module-compute/Fargate"
+  source      = "../../../../EngRepos/AWS/cms-aws-terraform-module-compute/Fargate"
   name_prefix = var.name_prefix
   env         = var.env
 }
@@ -109,7 +183,7 @@ module "fargate_webapp" {
 
 ---
 
-## 5. モジュール呼び出しパターン
+## 8. モジュール呼び出しパターン
 
 ### パターン① EC2（Web/APP + Bastion + RDS）
 ```
@@ -153,7 +227,7 @@ CodePipeline + ALB + VPCEndpoint + ACM
 
 ---
 
-## 6. リソースブロック命名規則
+## 9. リソースブロック命名規則
 
 特別な理由がない限りリソースブロック名は `this` を使用する。
 
@@ -174,7 +248,7 @@ resource "aws_kms_key" "this" {
 
 ---
 
-## 7. モジュール参照ルール
+## 10. モジュール参照ルール
 
 ### 原則（参照のみ）
 - 既存モジュール（`cms-aws-terraform-module-*`）は**参照のみ**とし、直接変更しない
@@ -185,6 +259,8 @@ resource "aws_kms_key" "this" {
 1. 変更理由（どの要件を満たすためか）
 2. 影響範囲（他パターン・他環境への影響）
 3. 代替案（ルートモジュール対応で回避できないか）
+
+変更実装はチーム内レビュー・合意後に行う。
 
 ### 個別要件対応
 - 原則として既存モジュールは変更しない

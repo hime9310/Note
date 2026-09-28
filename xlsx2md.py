@@ -9,12 +9,14 @@ xlsx2md.py — Excel(.xlsx / .xlsm) の各シートを Markdown の表(md表)に
     python xlsx2md.py input -o output       # フォルダ指定
 
 変換ルール(要点):
-  - 先頭(または --main-sheet で指定)のシート → <元ファイル名>.md
-  - それ以外のシート            → <元ファイル名>_<シート名>.md
+  - 出力は <元ファイル名>.md の1ファイル。先頭(または --main-sheet で指定)のシートが本表、
+    それ以外のシートは同じファイルの後半に「参照シート」の節として入る(--separate-files で別ファイルに)
+  - 本表と参照シートの間に目印の行 <!-- 参照シート ここから --> を入れる
+    (ツール側で本表の行数だけを数えるときは、この目印より前を数える)
   - Excelのテーブル(ListObject)があればその範囲を表として使う。無ければ見出し行を自動判定
   - セル内の改行は <br>、半角の縦棒 | は全角 ｜ に置き換える(md表を崩さないため)
   - 非表示の行・列は出力しない(--include-hidden で出力)
-  - セル内に他シートの名前が出てきたら、そのシートのmdへのリンクに置き換える(--no-link-refs で無効)
+  - セル内に他シートの名前が出てきたら、その参照シートの節へのリンクに置き換える(--no-link-refs で無効)
   - 表以外の行(タイトル・元ファイル名・関連シートのリンク)は | で始めない
     (行数をツールで数える約束: 「| で始まる行」=表の行)
 
@@ -173,22 +175,54 @@ def link_sheet_refs(text: str, sheet_links: dict[str, str], self_name: str) -> s
     return text
 
 
-def render_markdown(title: str, source_name: str, headers: list[str], rows: list[list[str]],
-                    related: list[tuple[str, str]], sheet_links: dict[str, str],
-                    link_refs: bool, converted_at: str) -> str:
+SUBSHEET_MARKER = "<!-- 参照シート ここから -->"
+
+
+def render_table(headers: list[str], rows: list[list[str]], sheet_links: dict[str, str],
+                 self_name: str, link_refs: bool) -> list[str]:
+    lines = ["| " + " | ".join(headers) + " |",
+             "|" + "|".join("---" for _ in headers) + "|"]
+    for row in rows:
+        cells = [link_sheet_refs(v, sheet_links, self_name) for v in row] if link_refs else row
+        lines.append("| " + " | ".join(cells) + " |")
+    return lines
+
+
+def render_document(source_name: str, converted_at: str,
+                    main: tuple[str, list[str], list[list[str]]],
+                    subs: list[tuple[str, str, list[str], list[list[str]]]],
+                    sheet_links: dict[str, str], link_refs: bool) -> str:
+    """本表(main)と参照シート(subs)を1つのmdにまとめる。
+
+    main: (シート名, 見出し, 行)
+    subs: (アンカーID, シート名, 見出し, 行) のリスト
+    """
+    title, headers, rows = main
+    lines = [f"# {title}", ""]
+    lines.append(f"元ファイル: {source_name} / シート: {title} / 変換日時: {converted_at}")
+    if subs:
+        rel = " / ".join(f"[{name}](#{anchor})" for anchor, name, _, _ in subs)
+        lines.append(f"参照シート(このファイルの後半): {rel}")
+    lines.append("")
+    lines += render_table(headers, rows, sheet_links, title, link_refs)
+    for anchor, name, sub_headers, sub_rows in subs:
+        lines += ["", SUBSHEET_MARKER, "", f'<a id="{anchor}"></a>', f"## 参照シート: {name}", "",
+                  f"元ファイル: {source_name} / シート: {name}", ""]
+        lines += render_table(sub_headers, sub_rows, sheet_links, name, link_refs)
+    lines.append("")
+    return "\n".join(lines)
+
+
+def render_single(source_name: str, converted_at: str, title: str, headers: list[str],
+                  rows: list[list[str]], related: list[tuple[str, str]],
+                  sheet_links: dict[str, str], link_refs: bool) -> str:
+    """--separate-files のときの1シート=1ファイル用。"""
     lines = [f"# {title}", ""]
     lines.append(f"元ファイル: {source_name} / シート: {title} / 変換日時: {converted_at}")
     if related:
-        rel = " / ".join(f"[{n}]({f})" for n, f in related)
-        lines.append(f"関連シート: {rel}")
+        lines.append("関連シート: " + " / ".join(f"[{n}]({f})" for n, f in related))
     lines.append("")
-    lines.append("| " + " | ".join(headers) + " |")
-    lines.append("|" + "|".join("---" for _ in headers) + "|")
-    for row in rows:
-        cells = row
-        if link_refs:
-            cells = [link_sheet_refs(v, sheet_links, title) for v in row]
-        lines.append("| " + " | ".join(cells) + " |")
+    lines += render_table(headers, rows, sheet_links, title, link_refs)
     lines.append("")
     return "\n".join(lines)
 
@@ -199,7 +233,7 @@ def render_markdown(title: str, source_name: str, headers: list[str], rows: list
 
 def convert_workbook(xlsx_path: Path, out_dir: Path, main_sheet: str | None,
                      include_hidden: bool, include_hidden_sheets: bool,
-                     drop_columns: set[str], link_refs: bool) -> list[Path]:
+                     drop_columns: set[str], link_refs: bool, separate_files: bool) -> list[Path]:
     wb = openpyxl.load_workbook(xlsx_path, data_only=True, read_only=False)
     base = xlsx_path.stem
     converted_at = _dt.datetime.now().strftime("%Y/%m/%d %H:%M")
@@ -215,29 +249,57 @@ def convert_workbook(xlsx_path: Path, out_dir: Path, main_sheet: str | None,
         main = next(ws for ws in sheets if ws.title == main_sheet)
     else:
         main = sheets[0]
+    others = [ws for ws in sheets if ws is not main]
 
-    # 出力ファイル名の対応表(シート名 → ファイル名)
+    # シート名 → リンク先(単一ファイル: 節のアンカー / 分割: ファイル名)
     sheet_links: dict[str, str] = {}
-    for ws in sheets:
-        if ws is main:
-            sheet_links[ws.title] = f"{base}.md"
-        else:
-            sheet_links[ws.title] = f"{base}_{sanitize_filename(ws.title)}.md"
+    anchors: dict[str, str] = {}
+    for i, ws in enumerate(others, start=1):
+        anchors[ws.title] = f"ref-{i}"
+        sheet_links[ws.title] = f"#ref-{i}" if not separate_files else f"{base}_{sanitize_filename(ws.title)}.md"
+    sheet_links[main.title] = f"{base}.md" if separate_files else "#top"
+
+    def read(ws):
+        headers, rows, origin = sheet_to_rows(ws, include_hidden, drop_columns)
+        print(f"  - シート '{ws.title}': 表の行数 {len(rows)} / 列数 {len(headers)} / {origin}")
+        return headers, rows
 
     written: list[Path] = []
-    for ws in sheets:
+    main_headers, main_rows = read(main)
+
+    if separate_files:
+        related = [(ws.title, sheet_links[ws.title]) for ws in others]
+        out_path = out_dir / f"{base}.md"
+        out_path.write_text(render_single(xlsx_path.name, converted_at, main.title, main_headers, main_rows,
+                                          related, sheet_links, link_refs), encoding="utf-8", newline="\n")
+        written.append(out_path)
+        for ws in others:
+            try:
+                h, r = read(ws)
+            except ValueError as e:
+                print(f"  - スキップ: シート '{ws.title}' ({e})")
+                continue
+            related = [(n, f) for n, f in sheet_links.items() if n != ws.title]
+            related = [(n, f if f != "#top" else f"{base}.md") for n, f in related]
+            out_path = out_dir / sheet_links[ws.title]
+            out_path.write_text(render_single(xlsx_path.name, converted_at, ws.title, h, r, related,
+                                              sheet_links, link_refs), encoding="utf-8", newline="\n")
+            written.append(out_path)
+        return written
+
+    subs = []
+    for ws in others:
         try:
-            headers, rows, origin = sheet_to_rows(ws, include_hidden, drop_columns)
+            h, r = read(ws)
         except ValueError as e:
             print(f"  - スキップ: シート '{ws.title}' ({e})")
             continue
-        related = [(n, f) for n, f in sheet_links.items() if n != ws.title]
-        md = render_markdown(ws.title, xlsx_path.name, headers, rows, related,
-                             sheet_links, link_refs, converted_at)
-        out_path = out_dir / sheet_links[ws.title]
-        out_path.write_text(md, encoding="utf-8", newline="\n")
-        written.append(out_path)
-        print(f"  - {out_path.name}: 表の行数 {len(rows)} / 列数 {len(headers)} / {origin}")
+        subs.append((anchors[ws.title], ws.title, h, r))
+    out_path = out_dir / f"{base}.md"
+    out_path.write_text(render_document(xlsx_path.name, converted_at, (main.title, main_headers, main_rows),
+                                        subs, sheet_links, link_refs), encoding="utf-8", newline="\n")
+    written.append(out_path)
+    print(f"  → {out_path.name}(本表: {main.title}" + (f" / 参照シート: {len(subs)}" if subs else "") + ")")
     return written
 
 
@@ -268,6 +330,8 @@ def main(argv=None) -> int:
                         help="非表示のシートも変換する(既定: 変換しない)")
     parser.add_argument("--no-link-refs", action="store_true",
                         help="セル内の他シート名をリンクに置き換えない")
+    parser.add_argument("--separate-files", action="store_true",
+                        help="シートごとに別ファイルにする(既定: 1ファイルにまとめ、他シートは後半の参照シート節)")
     args = parser.parse_args(argv)
 
     target = Path(args.target)
@@ -289,7 +353,7 @@ def main(argv=None) -> int:
         try:
             written = convert_workbook(xlsx, out_dir, args.main_sheet, args.include_hidden,
                                        args.include_hidden_sheets, drop_columns,
-                                       not args.no_link_refs)
+                                       not args.no_link_refs, args.separate_files)
         except PermissionError:
             print(f"  ! 開けません(Excelで開いたままの可能性): {xlsx.name}", file=sys.stderr)
             continue

@@ -1,1 +1,1 @@
-concat('criteria=', string(length(base64ToString(body('ノックアウト要件取得')?['$content']))), ' / salus=', string(length(base64ToString(body('Salus取得')?['$content']))), ' / thread=', string(length(variables('threadText'))))
+concat('checkpoints=', string(length(outputs('checkpoints'))), ' / rows=', string(outputs('適用行数')), ' / thread=', string(length(outputs('threadText'))))

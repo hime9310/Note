@@ -13,5 +13,87 @@ MSAL ライブラリは、Microsoft Authentication Library の略で、Microsoft
 問い合わせ文は、グレースさんが向こうから聞き返されたときに自分の言葉で答えられる表現のほうがよいので、想定構成の3行を「認証: 利用者本人が普段どおり Microsoft にサインインする方式(Microsoft 公式ライブラリ MSAL を使用)」「アプリ種別: 社用 PC 上で動くデスクトップアプリ(パブリッククライアント)」「アプリ用のパスワード(クライアントシークレット)は持たない構成を希望。難しければシークレットありでも可」のように、かっこで平易な言い換えを付けた形に直すこともできます。そのほうがよければ日本語・英語の両方を直します。
 
 ーーーーー
+Global Service Desk ご担当者様
 
+【氏名】です。
+社内の PoC ツールから Microsoft Graph API を使って Teams と SharePoint を「読み取りのみ」で利用したいと考えています。そのために必要な Entra ID アプリの登録と API 権限の付与が社内ルール上可能か、可能な場合にどのような申請・手順が必要かを確認したくご連絡しました。認証・API周りは不慣れなため、用語や前提に誤りがあればご指摘ください。
 
+■ やりたいこと
+- アーキテクチャレビュー業務(利用者から受領した構成図の確認)を AI で効率化する PoC を進めています。
+- 社用社用PC上で動くツールから、Teams の特定チャネルのスレッド本文と、SharePoint の特定フォルダのファイルを「読み取りのみ」で取得したいです。
+- そのために、Microsoft Graph API を利用する Entra ID アプリの登録と API 権限の付与が必要と理解しています。
+
+■ 想定構成
+- 利用者: JP (社内ユーザーのみ。外部公開なし)
+- 動作場所: 各 社用社用PC上(サーバーなし。クラウドへのデータ保存なし)
+- 認証: 利用者本人が普段どおり Microsoft にサインインし、本人が見られる範囲だけにアクセスする方式(委任権限/Delegated。Microsoft 公式ライブラリ MSAL を使用)。ユーザー不在でアクセスするアプリケーション権限は使いません
+- アプリ種別: 社用 PC 上で動くデスクトップアプリ(パブリッククライアント)
+- アプリ用のパスワード(クライアントシークレット)は持たない構成を希望します。難しい場合はシークレットありの構成でも可です
+- 操作: Graph API の GET(読み取り)のみ。Teams への投稿、SharePoint への書き込みは行いません
+- 対象: 特定のチーム/チャネル1つ、特定の SharePoint サイト1つに限定。いずれも日本テナント側(jpdeloitte.sharepoint.com)です
+
+■ 必要と考えている API 権限(すべて委任・読み取り)
+- ChannelMessage.Read.All(チャネルのメッセージと返信の読み取り)
+- Sites.Read.All または Files.Read.All(SharePoint のファイル読み取り)
+- User.Read / offline_access(既定で承認済みと理解しています)
+- Team.ReadBasic.All / Channel.ReadBasic.All(チーム名・チャネル名の取得)
+
+■ 確認したいこと
+1. 可否: 上記の構成・権限で Entra ID アプリの登録と権限付与は可能でしょうか。
+   (可 / 条件付きで可 / 不可。条件や不可の理由があればその内容)
+2. 権限の承認: 上記の権限のうち、追加の承認(セキュリティ部門の審査など)が必要なものはどれでしょうか。また、その申請先と申請方法を教えてください。
+   (権限ごとに 承認不要 / 要承認、要承認の場合の申請先・方法)
+3. 手順: アプリ登録から利用開始までに必要な申請と手順を、順番と所要期間の目安とともに教えてください。登録の前に必要な審査や登録があれば、それも含めてお願いします。
+   (ステップの一覧と、各ステップのおおよその期間)
+4. 登録の形式: Application Registration Tool で、デスクトップアプリ(パブリッククライアント、シークレットなし)として登録できますか。できない場合、推奨される登録形式を教えてください。
+   (可 / 不可。不可の場合の推奨形式)
+5. 利用条件: Teams のメッセージ本文を読む権限(ChannelMessage.Read.All)について、対象チャネルの限定・ログの取得・関係者への周知など、守るべき条件はありますか。
+   (条件の有無と内容)
+6. 申請者: 申請は担当 Eng 個人のアカウントで行ってよいでしょうか。
+   (可 / 不可。不可の場合は誰が申請すべきか)
+
+ご多忙のところ恐れ入りますが、ご確認のほどよろしくお願いいたします。
+
+ーーーー
+Dear Global Service Desk team,
+
+I am [Name], .
+We would like to use the Microsoft Graph API from an internal PoC tool to access Teams and SharePoint on a read-only basis. I am contacting you to confirm whether the required Entra ID application registration and API permission grants are permitted under our internal rules and, if so, which requests and steps are needed. I am not familiar with authentication / API topics, so please correct me if any terms or assumptions are wrong.
+
+[What we want to do]
+- We are running a PoC that uses AI to streamline our architecture review process (reviewing architecture diagrams received from internal users).
+- A tool running on engineers' corporate laptops needs to read (read-only) thread messages from one specific Teams channel and files from one specific SharePoint folder.
+- We understand this requires registering an Entra ID application and granting Microsoft Graph API permissions.
+
+[Planned setup]
+- Users: a few engineers in JP CMS (internal users only, no external access)
+- Runs on: each engineer's corporate laptop (no server, no data stored in the cloud)
+- Authentication: the user signs in to Microsoft as usual and the tool accesses only what that user can already see (delegated permissions, using the official Microsoft library MSAL). No application permissions (no access without a signed-in user)
+- App type: desktop application running on the engineer's PC (public client)
+- We would prefer a configuration without an application password (client secret). If that is not possible, a configuration with a client secret is acceptable
+- Operations: Microsoft Graph GET (read) calls only. No posting to Teams, no writing to SharePoint
+- Scope: limited to one team/channel and one SharePoint site, both in the Japan tenant (jpdeloitte.sharepoint.com)
+
+[Permissions we believe are required (all delegated, read-only)]
+- ChannelMessage.Read.All (read channel messages and replies)
+- Sites.Read.All or Files.Read.All (read SharePoint files)
+- User.Read / offline_access (we understand these are pre-approved)
+- Team.ReadBasic.All / Channel.ReadBasic.All (team and channel names)
+
+[Questions]
+1. Feasibility: Can an Entra ID application be registered and granted the permissions above with this setup?
+   (Yes / Yes with conditions / No. If there are conditions or reasons, please describe them.)
+2. Permission approval: Which of the permissions above require additional approval (e.g., a security review)? Where and how should such approval be requested?
+   (For each permission: no approval needed / approval needed, and where and how to request it.)
+3. Procedure: Which requests and steps are needed from application registration to go-live, in what order, and with what approximate lead time? Please include any reviews or registrations required before the application can be registered.
+   (A list of steps with the approximate duration of each.)
+4. Registration type: Can the application be registered in the Application Registration Tool as a desktop application (public client, no client secret)? If not, which registration type is recommended?
+   (Yes / No. If No, the recommended type.)
+5. Conditions of use: For the permission to read Teams message content (ChannelMessage.Read.All), are there conditions we must follow, such as limiting the target channels, logging, or notifying stakeholders?
+   (Whether there are conditions, and what they are.)
+6. Requestor: Can the request be submitted under an individual engineer's account?
+   (Yes / No. If No, who should submit it.)
+
+Thank you very much for your support.
+
+[Name / Department / Contact]

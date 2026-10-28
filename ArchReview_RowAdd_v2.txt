@@ -1,0 +1,68 @@
+﻿function main(workbook: ExcelScript.Workbook, rowsJson: string) {
+  // 記入者を固定で入れる場合はここに名前を書く(空のままなら記入者は空欄)
+  const WRITER = "";
+
+  // 行データ(JSON文字列)を配列に変換
+  const rows = JSON.parse(rowsJson) as Record<string, string>[];
+  if (rows.length === 0) { return 0; }
+
+  // 対象テーブルを取得
+  const table = workbook.getTable("T_アーキテクチャレビュー票");
+  if (!table) { throw new Error("テーブル T_アーキテクチャレビュー票 が見つかりません"); }
+
+  // テーブルのヘッダー順を取得し、その順番でデータを並べる
+  const headers = table.getHeaderRowRange().getValues()[0] as string[];
+
+  // 記入日(日本時間 yyyy/mm/dd)
+  const jst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  const today = `${jst.getUTCFullYear()}/${pad2(jst.getUTCMonth() + 1)}/${pad2(jst.getUTCDate())}`;
+
+  const values: string[][] = rows.map(row => {
+    // 指摘内容・対応ガイドライン・参考資料を読みやすい改行に整える
+    if (row["指摘内容"] !== undefined && row["指摘内容"] !== null) {
+      row["指摘内容"] = formatShiteki(String(row["指摘内容"]));
+    }
+    if (row["対応ガイドライン・参考資料"] !== undefined && row["対応ガイドライン・参考資料"] !== null) {
+      row["対応ガイドライン・参考資料"] = formatGuide(String(row["対応ガイドライン・参考資料"]));
+    }
+    // 記入日・記入者(空のときだけ入れる)
+    if (!row["記入日"]) { row["記入日"] = today; }
+    if (!row["記入者"] && WRITER !== "") { row["記入者"] = WRITER; }
+    return headers.map(h => (row[h] !== undefined && row[h] !== null) ? String(row[h]) : "");
+  });
+
+  // まとめて追記
+  table.addRows(-1, values);
+
+  // 追記した行を「折り返して全体を表示」にし、上揃えにして行の高さを合わせる
+  const body = table.getRangeBetweenHeaderAndTotal();
+  const start = body.getRowCount() - values.length;
+  const added = body.getCell(start, 0).getResizedRange(values.length - 1, headers.length - 1);
+  added.getFormat().setWrapText(true);
+  added.getFormat().setVerticalAlignment(ExcelScript.VerticalAlignment.top);
+  added.getFormat().autofitRows();
+
+  return values.length;
+}
+
+function pad2(n: number): string { return (n < 10 ? "0" : "") + n; }
+
+// 指摘内容: 「。」の後で改行。空白の後に ・ ■ ※ 【 ¥[ -(箇条書き) が来たら改行
+function formatShiteki(text: string): string {
+  let t = text.replace(/\r\n/g, "\n").replace(/<br\s*\/?>/gi, "\n");
+  t = t.replace(/。(?![\n」』）)])/g, "。\n");
+  t = t.replace(/[ 　]+(?=[・■※【]|[¥\\]\[|-[^>\s-])/g, "\n");
+  return tidy(t);
+}
+
+// 対応ガイドライン・参考資料: URL を1行にし、その前後で改行(タイトル行 + URL行 の形になる)
+function formatGuide(text: string): string {
+  let t = text.replace(/\r\n/g, "\n").replace(/<br\s*\/?>/gi, "\n");
+  t = t.replace(/(https?:\/\/[A-Za-z0-9._~:\/?#\[\]@!$&'()*+,;=%-]+)/g, "\n$1\n");
+  return tidy(t);
+}
+
+// 各行の前後の空白を除き、空行を詰める
+function tidy(t: string): string {
+  return t.split("\n").map(s => s.trim()).filter(s => s.length > 0).join("\n");
+}

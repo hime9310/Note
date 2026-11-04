@@ -1,0 +1,11 @@
+{
+  "markdown.styles": [
+    ".vscode/markdown-preview.css"
+  ],
+  "markdown.extension.print.imgToBase64": true,
+  "markdown.extension.print.onFileSave": false,
+  "[markdown]": {
+    "editor.formatOnSave": false,
+    "editor.formatOnPaste": false
+  }
+}
